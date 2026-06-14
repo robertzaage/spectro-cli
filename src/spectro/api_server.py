@@ -258,12 +258,25 @@ async def _handle_client(
     addr = writer.get_extra_info("peername")
     logger.info("API client connected: %s", addr)
     buf = b""
+    is_http = False
     try:
         while True:
             data = await reader.read(4096)
             if not data:
                 break
             buf += data
+
+            # Detect HTTP: strip request line + headers, keep body
+            if not is_http and buf.startswith((b"GET ", b"POST ", b"PUT ", b"DELETE ")):
+                is_http = True
+                if b"\r\n\r\n" in buf:
+                    _, buf = buf.split(b"\r\n\r\n", 1)
+                elif b"\n\n" in buf:
+                    _, buf = buf.split(b"\n\n", 1)
+                # Ensure the body is newline-terminated for JSONL parsing
+                if buf and not buf.endswith(b"\n"):
+                    buf += b"\n"
+
             while b"\n" in buf:
                 line, buf = buf.split(b"\n", 1)
                 line = line.strip()
@@ -272,7 +285,18 @@ async def _handle_client(
                 try:
                     cmd = json.loads(line)
                 except json.JSONDecodeError:
-                    writer.write(b'{"event":"error","error_code":"vi-invalid-json"}\n')
+                    err_resp = b'{"event":"error","error_code":"vi-invalid-json"}\n'
+                    if is_http:
+                        writer.write(
+                            f"HTTP/1.1 400 Bad Request\r\n"
+                            f"Content-Type: application/json\r\n"
+                            f"Content-Length: {len(err_resp)}\r\n"
+                            f"Connection: close\r\n"
+                            f"\r\n".encode()
+                            + err_resp
+                        )
+                    else:
+                        writer.write(err_resp)
                     await writer.drain()
                     continue
 
@@ -284,14 +308,36 @@ async def _handle_client(
                         resp = await handler(state, params)
                     except Exception as e:
                         resp = _err(command, "vi-internal-error", {"message": str(e)})
-                    writer.write(resp.encode() + b"\n")
+                    payload = resp.encode() + b"\n"
+                    if is_http:
+                        writer.write(
+                            f"HTTP/1.1 200 OK\r\n"
+                            f"Content-Type: application/json\r\n"
+                            f"Content-Length: {len(payload)}\r\n"
+                            f"Connection: close\r\n"
+                            f"\r\n".encode()
+                            + payload
+                        )
+                    else:
+                        writer.write(payload)
                     await writer.drain()
 
                     if command == "shutdown":
                         writer.close()
                         return
                 else:
-                    writer.write(_err(command, "vi-unknown-command", {}).encode() + b"\n")
+                    err_resp = _err(command, "vi-unknown-command", {}).encode() + b"\n"
+                    if is_http:
+                        writer.write(
+                            f"HTTP/1.1 404 Not Found\r\n"
+                            f"Content-Type: application/json\r\n"
+                            f"Content-Length: {len(err_resp)}\r\n"
+                            f"Connection: close\r\n"
+                            f"\r\n".encode()
+                            + err_resp
+                        )
+                    else:
+                        writer.write(err_resp)
                     await writer.drain()
     except Exception:
         logger.debug("Client disconnected: %s", addr, exc_info=True)

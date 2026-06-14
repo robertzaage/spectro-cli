@@ -194,38 +194,7 @@ def version() -> None:
 
 
 # ---------------------------------------------------------------------------
-# configure
-# ---------------------------------------------------------------------------
-@app.command()
-def configure(
-    session_token: str = typer.Option("", "--token", "-t", help="Session-Token header value"),
-    subscription_id: int = typer.Option(0, "--sub-id", "-s", help="Cas-Sub-Id header value"),
-    b2_access_key: str = typer.Option("", "--b2-key", help="B2 access key"),
-    show: bool = typer.Option(False, "--show", help="Display current config"),
-) -> None:
-    """View or set Cloud API credentials."""
-    if show:
-        for label, value in [
-            ("Session token", CONFIG.api.session_token or "(not set)"),
-            ("Subscription ID", CONFIG.api.subscription_id or "(not set)"),
-            ("B2 access key", CONFIG.api.b2_access_key or "(not set)"),
-        ]:
-            console.print(f"{label:16s} {value}")
-        console.print(f"Config file:      {CONFIG.path()}")
-        return
-
-    if not session_token and not subscription_id:
-        session_token = typer.prompt("Session token", default=CONFIG.api.session_token)
-        subscription_id = int(typer.prompt("Subscription ID", default=str(CONFIG.api.subscription_id or 0)))
-
-    CONFIG.save(
-        session_token=session_token,
-        subscription_id=subscription_id,
-        b2_access_key=b2_access_key,
-    )
-    console.print(f"[green]Saved → {CONFIG.path()}[/]")
-
-
+# scan-devices
 # ---------------------------------------------------------------------------
 # scan-devices
 # ---------------------------------------------------------------------------
@@ -611,14 +580,10 @@ def api(
 ) -> None:
     """Start a BridgeKit-compatible JSONL API server.
 
-    Implements the Bridge by Variable protocol over TCP.  Connect with
-    any BridgeKit client or send JSON commands via netcat:
+    Implements the Bridge by Variable protocol over TCP (direct BLE, no dongle).
 
-        echo '{"command":"GetDongle"}' | nc localhost 9100
-        echo '{"command":"Scan","parameters":{"serial":"DEVICE123"}}' | nc localhost 9100
-
-    Supported commands: GetDongle, GetConfiguration, Scan, Connect,
-    Disconnect, StartBluetoothDiscovery, StopBluetoothDiscovery, Shutdown.
+        curl -s localhost:9100 -d '{"command":"GetDongle"}' | jq .
+        curl -s localhost:9100 -d '{"command":"Scan","parameters":{"serial":"DEVICE123"}}' | jq .
     """
     from .api_server import run_api_server
 

@@ -488,32 +488,10 @@ The vendor column populates when a product UUID extracted from the realm file ma
 
 ---
 
-## Configuration
-
-### File Format
-
-```json
-{
-  "session_token": "",
-  "subscription_id": 0,
-  "b2_access_key": ""
-}
-```
-
-Located at `~/.spectro/config.json`. Loaded once at import time via `Config().load()`.
-
-### Override Hierarchy
-
-1. CLI flags (`--token`, `--sub-id`)
-2. Environment variables (`SPECTRO_SESSION_TOKEN`, `SPECTRO_SUBSCRIPTION_ID`)
-3. Config file (`~/.spectro/config.json`)
-4. Defaults (empty string / 0)
-
 ### Data Directory
 
 ```
 ~/.spectro/
-├── config.json              # API credentials
 ├── models/
 │   └── {SERIAL}/
 │       ├── info_v2.json      # Pipeline configuration

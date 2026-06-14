@@ -89,7 +89,6 @@ Scan — DEVICE123
 | `spectro download models` | Download ML correction model |
 | `spectro download products` | Download product colour database |
 | `spectro search offline` | Search downloaded product DB |
-| `spectro configure` | Set API credentials |
 | `spectro version` | Print version |
 
 All commands that accept an address will auto-detect the device if omitted.
