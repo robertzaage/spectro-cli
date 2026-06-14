@@ -6,8 +6,11 @@
 - Full measurement pipeline with neural ML correction (matching Android app output, ΔE < 0.3)
 - BridgeKit-compatible JSONL API server (`spectro api`)
 - Device calibration with white/green/blue tile verification (`spectro calibrate`)
-- Offline product database search with 1,372 indexed products (`spectro search offline`)
+- Offline product database search with 1,190 indexed products (`spectro search offline`)
+- Custom Realm file parser (`realm_parser.py`) extracting products from B-tree leaf pages
 - ML model download from public S3 bucket (`spectro download models`)
+- Auto-download of product DB and ML models on first use (no separate download step needed)
+- Auto-extraction of neural network weights from Core ML `.mlmodel` files
 - Product colour database download (`spectro download products`)
 - Auto-detection of nearby devices when address is omitted
 - Interactive scan mode with `--keep` / `-k` flag

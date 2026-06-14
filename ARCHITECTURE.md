@@ -26,7 +26,9 @@ src/spectro/
 ├── __init__.py           # __version__ = "0.2.0"
 ├── cli.py                # 12 Typer CLI commands (510 lines)
 ├── config.py             # File-backed Config + APIConfig dataclasses
-├── products.py           # ProductIndex — SQLite offline search (310 lines)
+├── products.py           # ProductIndex — SQLite offline search (230 lines)
+├── realm_parser.py       # Realm file parser — B-tree page extraction (180 lines)
+├── api_server.py          # BridgeKit-compatible JSONL TCP server (290 lines)
 ├── api_server.py         # BridgeKit-compatible JSONL TCP server (290 lines)
 ├── calibrate.py          # Spectro 1 three-tile calibration flow (170 lines)
 ├── models/
@@ -454,9 +456,15 @@ The product database ZIP contains two files:
 | File | Format | Contents |
 |---|---|---|
 | `*filters*.db` | SQLite | 9,722 filter entries: UUID → vendor, collection, category, brand, location |
-| `*products*.realm` | Realm B-tree | 1,372 product entries: name + hex colour |
+| `*products*.realm` | Realm B-tree | 1,190 product entries: name + hex colour |
 
 ### Index Building
+
+The `realm_parser.py` module reads width-17 B-tree leaf pages to extract
+product names from dedicated string tables, then matches them to hex colours
+by file-position proximity.  The filter SQLite companion DB (2,091 UUID→vendor
+entries) is imported into the `product_filters` table — vendor/collection data
+auto-populates when UUIDs are linked.
 
 ```mermaid
 flowchart LR
@@ -465,8 +473,8 @@ flowchart LR
     Extract --> Realm["*products*.realm<br/>20 MB binary"]
     
     Filters --> Import1["Import UUID→vendor/collection/category<br/>→ product_filters table"]
-    Realm --> Scan["Scan for #XXXXXX hex codes<br/>Match nearby product names"]
-    Scan --> Products["1372 name + hex pairs<br/>→ products table"]
+    Realm --> Parser["realm_parser.py<br/>Width-17 B-tree pages"]
+    Parser --> Products["1190 name + hex pairs<br/>→ products table"]
     
     Import1 --> Index["search_index.db<br/>SQLite"]
     Products --> Index
