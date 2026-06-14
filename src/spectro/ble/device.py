@@ -65,6 +65,7 @@ class ScanResult:
     corrected_values: list[float] | None = None
     correction_factors: list[float] | None = None
     ml_inference_ms: float = 0.0
+    ml_applied: bool = False
 
 
 @dataclass
@@ -283,6 +284,8 @@ class SpectroDevice:
         self._client = BleakClient(self._ble, timeout=CONFIG.connect_timeout)
         await self._client.connect()
         await self._enable_notifications()
+        # Pre-load ML model so batch info is available
+        await self._ensure_ml_model()
         await self._read_device_info()
 
     async def disconnect(self) -> None:
@@ -369,8 +372,13 @@ class SpectroDevice:
                 ml_output = pipeline.predict(sense)
                 result.corrected_values = ml_output
                 result.ml_inference_ms = pipeline.last_inference_ms
+                result.ml_applied = True
             except Exception:
-                logger.debug("ML pipeline unavailable for %s", self._serial, exc_info=True)
+                logger.warning(
+                    "ML pipeline unavailable for %s — run 'spectro download models --serial %s'",
+                    self._serial,
+                    self._serial,
+                )
 
         # Fallback: apply device correction factors directly (no ML)
         factors_ok = (
@@ -446,6 +454,21 @@ class SpectroDevice:
         if self._client:
             await self._client.write_gatt_char(uuid, data, response=response)
 
+    async def _ensure_ml_model(self) -> None:
+        """Download the ML correction model if not cached."""
+        if not self._serial:
+            return
+        try:
+            from ..models import ModelPipeline
+
+            await asyncio.to_thread(ModelPipeline, self._serial)
+        except Exception:
+            logger.warning(
+                "ML model download failed for %s. Run 'spectro download models --serial %s' manually.",
+                self._serial,
+                self._serial,
+            )
+
     async def _read_device_info(self) -> None:
         if not self._client:
             return
@@ -489,10 +512,13 @@ class SpectroDevice:
         if self._batch == "?" and self._serial:
             import re as _re
 
-            m = _re.match(r"\d?([A-Z]?\d+)", self._serial)
-            if m:
-                prefix = self._serial[0] if self._serial[0].isalpha() else "s"
-                self._batch = f"{prefix}{m.group(1).lstrip('0') or '0'}"
+            # Only guess batch if no model info available
+            info_path = CONFIG.data_dir / "models" / self._serial / "info_v2.json"
+            if not info_path.exists():
+                m = _re.match(r"\d?([A-Z]?\d+)", self._serial)
+                if m:
+                    prefix = self._serial[0] if self._serial[0].isalpha() else "s"
+                    self._batch = f"{prefix}{m.group(1).lstrip('0') or '0'}"
 
         # Scan counts — uint32 little-endian pairs
         counts = await self._read(Chars.SCAN_COUNTS)
@@ -545,23 +571,3 @@ class SpectroDevice:
             batch = _parse_correction_batch(corr)
             if batch:
                 self._batch = batch
-
-        # Fallback: try model info for batch
-        if self._batch == "?" and self._serial:
-            try:
-                from ..models import ModelPipeline
-
-                pipeline = ModelPipeline(self._serial)
-                info = pipeline.info
-                if info and "native_batch" in info:
-                    self._batch = info["native_batch"]
-                elif info:
-                    for os_info in info.get("output_spaces", []):
-                        if os_info.get("is_native"):
-                            self._batch = os_info.get("batch", self._batch)
-            except Exception:
-                pass
-
-        temp = await self._read(Chars.TEMPERATURE)
-        if temp:
-            self._temperature = _parse_temperature(temp)

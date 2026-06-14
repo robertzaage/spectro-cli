@@ -21,6 +21,10 @@ import numpy as np
 
 from ..config import CONFIG
 
+# coremltools logs noisy warnings on Linux about missing macOS native libs.
+# The spec-parsing API we use works fine without them.
+logging.getLogger("coremltools").setLevel(logging.ERROR)
+
 logger = logging.getLogger(__name__)
 
 _S3_BASE = "https://gdn.colourcloud.net/s3/colorcloud.io/spectro_one/model_packages_v2/zips/ios"
@@ -150,6 +154,22 @@ class ModelPipeline:
     def _download(self, dest: Path) -> None:
         url = f"{_S3_BASE}/{self.serial}.zip"
         _download_model(self.serial, dest, url)
+        # Extract weights from .mlmodel files so _load finds .npz files
+        for name in ["unification", "adjustment_ca", "adjustment"]:
+            mlmodel = dest / f"{name}.mlmodel"
+            npy = dest / f"{name}_weights.npz"
+            if mlmodel.exists() and not npy.exists():
+                try:
+                    weights = _extract_coreml_weights(str(mlmodel), name)
+                    np.savez(npy, **weights)
+                    n = sum(v.size for v in weights.values())
+                    logger.info("Extracted %s weights (%d params)", name, n)
+                except Exception as e:
+                    logger.warning(
+                        "Failed to extract %s weights: %s. Install coremltools: pip install coremltools",
+                        name,
+                        e,
+                    )
 
     def _load(self, model_dir: Path) -> None:
         info_path = model_dir / "info_v2.json"
@@ -165,8 +185,14 @@ class ModelPipeline:
             if npy.exists():
                 weights = dict(np.load(npy))
             elif mlmodel.exists():
-                weights = _extract_coreml_weights(mlmodel, name)
-                np.savez(npy, **weights)
+                try:
+                    weights = _extract_coreml_weights(str(mlmodel), name)
+                    np.savez(npy, **weights)
+                except Exception as e:
+                    raise RuntimeError(
+                        f"Failed to extract {name} weights from {mlmodel}: {e}. "
+                        "Install coremltools: pip install coremltools"
+                    ) from e
             else:
                 raise FileNotFoundError(f"Model file not found: {mlmodel}")
 

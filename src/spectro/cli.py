@@ -125,7 +125,7 @@ def _display_scan(console: Console, result: ScanResult, dev: SpectroDevice) -> N
     console.print(f"  Calibrated: {'Yes' if result.is_calibrated else 'No'}")
 
     data = result.corrected_values or result.sense_values
-    if result.corrected_values:
+    if result.corrected_values and result.ml_applied:
         try:
             import json
 
@@ -138,9 +138,8 @@ def _display_scan(console: Console, result: ScanResult, dev: SpectroDevice) -> N
                 console.print(f"  Correction: ML pipeline ({result.ml_inference_ms:.1f}ms)")
         except Exception:
             console.print(f"  Correction: ML pipeline ({result.ml_inference_ms:.1f}ms)")
-    else:
-        n = len(result.correction_factors or [])
-        console.print(f"  Correction: {n} device factors applied")
+    elif result.correction_factors:
+        console.print(f"  Correction: {len(result.correction_factors)} device factors")
 
     if not data:
         console.print("[dim]No spectral data.[/]")
@@ -470,10 +469,19 @@ def models(
     for s in serials:
         console.print(f"[yellow]Downloading model for {s}...[/]")
         try:
-            from .models import _download_model
+            import numpy as np
+
+            from .models import _download_model, _extract_coreml_weights
 
             dest = CONFIG.data_dir / "models" / s
             size = _download_model(s, dest)
+            # Extract weights from .mlmodel files
+            for name in ["unification", "adjustment_ca", "adjustment"]:
+                mlmodel = dest / f"{name}.mlmodel"
+                npy = dest / f"{name}_weights.npz"
+                if mlmodel.exists() and not npy.exists():
+                    weights = _extract_coreml_weights(str(mlmodel), name)
+                    np.savez(npy, **weights)
             console.print(f"  [green]{s}[/] → {dest} ({_fmt_size(size)})")
             total_size += size
         except Exception as e:
@@ -528,10 +536,25 @@ def offline(
     limit: int = typer.Option(50, "--limit", "-l", help="Max results"),
     rebuild: bool = typer.Option(False, "--rebuild", help="Rebuild the search index"),
 ) -> None:
-    """Search the downloaded product database (no internet required)."""
+    """Search the downloaded product database.  Downloads automatically on first use."""
     index = ProductIndex()
     try:
         if rebuild or not index.is_built():
+            zip_path = CONFIG.data_dir / "products" / "vp-dbs-0.zip"
+            if not zip_path.exists():
+                console.print("[yellow]Downloading product database (first time)...[/]")
+                import httpx
+
+                url = "https://d2s9pnfn2sxp4v.cloudfront.net/variable-product-db-zips/v1/vp-dbs-0.zip"
+                zip_path.parent.mkdir(parents=True, exist_ok=True)
+                with (
+                    httpx.Client(timeout=httpx.Timeout(300)) as client,
+                    client.stream("GET", url) as resp,
+                ):
+                    resp.raise_for_status()
+                    zip_path.write_bytes(resp.read())
+                console.print(f"  [green]Downloaded {_fmt_size(zip_path.stat().st_size)}[/]")
+
             console.print("[yellow]Building product index...[/]")
             count = index.build()
             console.print(f"  [green]Indexed {count} products[/]")

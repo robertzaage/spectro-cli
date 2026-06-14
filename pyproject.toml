@@ -43,6 +43,9 @@ dev = [
 gui = [
     "textual>=0.80,<2",
 ]
+models = [
+    "coremltools>=8",
+]
 
 [project.urls]
 Homepage = "https://github.com/anomalyco/spectro"
