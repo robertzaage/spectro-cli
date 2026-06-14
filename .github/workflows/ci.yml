@@ -20,9 +20,9 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.13"
-      - run: uv venv && uv pip install ruff
-      - run: .venv/bin/ruff check src/ tests/
-      - run: .venv/bin/ruff format src/ tests/ --check
+      - run: uv pip install ruff
+      - run: uv run ruff check src/ tests/
+      - run: uv run ruff format src/ tests/ --check
 
   test:
     name: Test (Python ${{ matrix.python }})
@@ -36,9 +36,8 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python }}
-      - run: uv venv
       - run: uv pip install -e ".[dev]"
-      - run: .venv/bin/pytest tests/ -v --cov=spectro --cov-report=term-missing --cov-report=xml
+      - run: uv run pytest tests/ -v --cov=spectro --cov-report=term-missing --cov-report=xml
       - uses: codecov/codecov-action@v5
         if: matrix.python == '3.13'
         with:
@@ -54,9 +53,8 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.13"
-      - run: uv venv
       - run: uv pip install -e ".[dev]" pyright
-      - run: .venv/bin/pyright src/spectro/ || true
+      - run: uv run pyright src/spectro/ || true
         continue-on-error: true
 
   build:
@@ -68,8 +66,8 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.13"
-      - run: uv venv && uv pip install build
-      - run: .venv/bin/python -m build
+      - run: uv pip install build
+      - run: uv run python -m build
       - uses: actions/upload-artifact@v4
         with:
           name: dist
