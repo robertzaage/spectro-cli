@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Coverage
+.coverage
+coverage.xml
+htmlcov/
+
+# Logs
+*.log
+BridgeKit.md
+
+# Repo
+/.coverage
+/coverage.xml
+/htmlcov/
+/dist/
+/build/
+/pyproject.toml.old
+/src/spectro.old*/
+/tmp/
+/com.variable*
+/Spectro*
+/password*
+/tmp/
