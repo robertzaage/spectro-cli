@@ -55,7 +55,8 @@ class TestModelVerification:
     """Verify extracted weights match expected sample outputs from info_v2.json."""
 
     @pytest.fixture(scope="class")
-    def weights(self) -> dict[str, dict[str, np.ndarray]]:
+    @classmethod
+    def weights(cls) -> dict[str, dict[str, np.ndarray]]:
         import os
 
         w = {}

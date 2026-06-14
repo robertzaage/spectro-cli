@@ -11,6 +11,19 @@ from spectro.ble.scanner import (
     _is_variable_device,
 )
 
+# BlueZ/D-Bus is not available in CI environments — skip BLE-dependent tests.
+try:
+    import asyncio
+
+    from bleak.backends.bluezdbus.manager import get_global_bluez_manager
+
+    asyncio.new_event_loop().run_until_complete(get_global_bluez_manager())
+    _HAS_BLUEZ = True
+except Exception:
+    _HAS_BLUEZ = False
+
+_need_bluez = pytest.mark.skipif(not _HAS_BLUEZ, reason="BlueZ/D-Bus not available")
+
 
 class TestIsVariableDevice:
     def test_spectro_name(self) -> None:
@@ -79,12 +92,14 @@ class TestDiscoveredDevice:
 
 
 class TestScanner:
+    @_need_bluez
     @pytest.mark.asyncio
     async def test_scan_returns_list(self) -> None:
         scanner = Scanner()
         devices = await scanner.scan(timeout=0.5)
         assert isinstance(devices, list)
 
+    @_need_bluez
     @pytest.mark.asyncio
     async def test_find_device_nonexistent(self) -> None:
         scanner = Scanner()
