@@ -181,7 +181,7 @@ curl -s localhost:9100 -d '{"command":"Shutdown"}'
 ## Development
 
 ```bash
-git clone https://github.com/anomalyco/spectro.git
+git clone https://github.com/robertzaage/spectro.git
 cd spectro
 pip install -e ".[dev]"
 pytest tests/ -v               # 116 tests
