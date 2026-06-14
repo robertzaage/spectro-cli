@@ -546,15 +546,15 @@ def offline(
         table.add_column("Hex", style="cyan")
         has_vendor = any(r.get("vendor") for r in results)
         if has_vendor:
-            table.add_column("Vendor", style="white")
+            table.add_column("Vendor", style="yellow")
         for r in results:
             h = r["hex_color"]
             if not h.startswith("#"):
                 h = f"#{h}"
+            row = [r["name"], f"[on {h}]    [/] {h}" if h else "-"]
             if has_vendor:
-                table.add_row(r["name"], f"[on {h}]    [/] {h}" if h else "-", r.get("vendor", ""))
-            else:
-                table.add_row(r["name"], f"[on {h}]    [/] {h}" if h else "-")
+                row.append(r.get("vendor", ""))
+            table.add_row(*row)
         console.print(table)
     finally:
         index.close()

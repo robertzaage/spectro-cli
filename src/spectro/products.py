@@ -69,6 +69,11 @@ class ProductIndex:
 
         logger.info("Building product index from %s", zip_path)
 
+        # Clear old index
+        self.conn.execute("DELETE FROM products")
+        self.conn.execute("DELETE FROM product_filters")
+        self.conn.commit()
+
         with zipfile.ZipFile(zip_path) as zf:
             filter_tmp = None
             realm_tmp = None
@@ -167,24 +172,42 @@ class ProductIndex:
     def _import_realm(self, realm_path: Path, products: dict[str, dict[str, str]]) -> None:
         """Extract product names and hex colours from the Realm binary file.
 
-        Scans for hex colour codes (#XXXXXX) and looks for nearby
-        capitalized product names in the surrounding text.
+        Scans for hex colour codes and matches them to nearby product
+        names.  Real product names appear sporadically; metadata labels
+        repeat frequently and are filtered out.
+
+        UUIDs are extracted from numeric clusters and stored separately
+        in the product_filters table (already populated from the companion
+        SQLite DB).  Linking UUIDs to products requires a full Realm
+        B-tree parser because name strings are stored alphabetically while
+        UUIDs are in row-insertion order — the linking key lives in the
+        B-tree internal nodes.
         """
         try:
             data = realm_path.read_bytes()
             text = data.decode("utf-8", errors="ignore")
-            hex_matches = list(re.finditer(r"#([0-9A-Fa-f]{6})", text))
+            hex_matches = [(m.start(), m.group(0)) for m in re.finditer(r"#([0-9A-Fa-f]{6})", text)]
 
-            for hm in hex_matches:
-                hex_val = hm.group(0)
-                nearby = text[max(0, hm.start() - 200) : hm.end() + 200]
+            name_re = re.compile(r"([A-Z][a-z]+(?:\s+[A-Z][a-z]+(?:\s+\d+[A-Za-z]?)?)+)")
+            name_freq: dict[str, int] = {}
+            for hpos, hv in hex_matches:
+                nearby = text[max(0, hpos - 400) : hpos + len(hv) + 400]
+                for n in name_re.findall(nearby):
+                    clean = n.strip()
+                    if any(c in clean for c in "\r\n\t\x00\x01"):
+                        continue
+                    if clean.isupper() or not any(c.islower() for c in clean):
+                        continue
+                    name_freq[clean] = name_freq.get(clean, 0) + 1
 
-                # Find title-case product names near the hex colour
-                name_matches = re.findall(r"([A-Z][a-z]+(?:\s+[A-Z][a-z]+(?:\s+\d+[A-Za-z]?)?)+)", nearby)
-                if name_matches:
-                    name = name_matches[0].strip()
-                    if hex_val not in products:
-                        products[hex_val] = {"name": name, "hex_color": hex_val}
+            valid = {n for n, c in name_freq.items() if c <= 15}
+            for hpos, hex_val in hex_matches:
+                nearby = text[max(0, hpos - 400) : hpos + len(hex_val) + 400]
+                for n in name_re.findall(nearby):
+                    clean = n.strip()
+                    if clean in valid and hex_val not in products:
+                        products[hex_val] = {"name": clean, "hex_color": hex_val, "uuid": ""}
+                        break
 
         except Exception:
             logger.debug("Failed to parse realm", exc_info=True)
