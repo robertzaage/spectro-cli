@@ -66,8 +66,7 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.13"
-      - run: uv pip install build
-      - run: uv run python -m build
+      - run: uv build
       - uses: actions/upload-artifact@v4
         with:
           name: dist
